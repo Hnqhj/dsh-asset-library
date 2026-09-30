@@ -1,0 +1,12 @@
+# 依赖与产物（本插件零依赖，理论上不存在，防御性收口）
+node_modules/
+*.log
+
+# 编辑器与系统文件
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
+
+# 测试夹具与本地运行产物
+.dsh-assets/
