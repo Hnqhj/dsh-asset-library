@@ -7,18 +7,45 @@
 把项目文件夹里的图片、视频、音频，变成一块可浏览、可筛选、可标注的素材面板 ——
 并且让 AI 助手能用同一套语义检索它们、拿到绝对路径去引用。
 
-[![tests](https://img.shields.io/badge/tests-220%20passing-brightgreen)](#-开发与测试)
-[![deps](https://img.shields.io/badge/dependencies-0-success)](#-设计原则)
-[![platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue)](#-已知限制)
-[![host](https://img.shields.io/badge/DeepSeek%20Harness-0.2%20preview-orange)](https://github.com/deepseek-ai)
+[![tests](https://img.shields.io/badge/tests-220%20passing-brightgreen?style=flat-square)](#-开发与测试)
+[![deps](https://img.shields.io/badge/dependencies-0-success?style=flat-square)](#-设计原则)
+[![license](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
+[![node](https://img.shields.io/badge/node-%3E%3D22-339933?style=flat-square&logo=node.js&logoColor=white)](#-安装)
+[![platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-6e7781?style=flat-square)](#-已知限制)
+[![host](https://img.shields.io/badge/DeepSeek%20Harness-0.2%20preview-orange?style=flat-square)](https://github.com/deepseek-ai)
 
 *素材留在你自己的项目目录里 —— 插件只做索引与展示，不搬文件、不改文件。*
 
 ![网格视图：缩略图墙、尺寸标注、彩色标签、多选批量条](docs/screenshots/grid-batch.png)
 
+[**它长什么样**](#-它长什么样) ·
+[**Agent 工具**](#-agent-工具) ·
+[**工作原理**](#️-工作原理) ·
+[**安装**](#-安装) ·
+[**配置**](#️-配置) ·
+[**开发与测试**](#-开发与测试) ·
+[**已知限制**](#-已知限制)
+
 </div>
 
 ---
+
+## 🤔 为什么需要它
+
+做短剧 / AI 视觉的工作流里，素材就堆在项目目录下：`EP1/封面/` 有二十个候选版本，
+`角色/` 里同一个人的定妆照改了七遍。资源管理器能给缩略图，但给不了**标签、备注、
+候选对比、批量打标**，更没法让 Agent 用同一套语义把它们找出来。
+
+`dsh-asset-library` 补的就是这一层：**不建素材库、不搬文件、不导入**，
+只在原地把目录扫出来、显示出来、标起来 —— 顺便把这份语义开放给 Agent。
+
+| | 传统素材管理器 | dsh-asset-library |
+|---|---|---|
+| 素材位置 | 导入进它的库里 | **原地不动**，就在你项目目录 |
+| 删除文件后 | 库里留幽灵条目 | 下次扫描自动同步 |
+| 标注存哪 | 它自己的私有数据库 | `.dsh-assets/index.json`，可读可重建 |
+| Agent 能否看见 | 通常不能 | **能**，且与人看到同一份数据 |
+| 依赖 | 常有缩略图服务 / ffmpeg | **0 依赖**，纯 JS 读文件头 + 浏览器降采样 |
 
 ## ✨ 它长什么样
 
@@ -115,6 +142,9 @@
 
 ## 🚀 安装
 
+> **前置**：Node.js ≥ 22、已安装 DeepSeek Harness。本仓库是**插件源码**，
+> 不是独立应用 —— 它需要一个 DSH 宿主才能跑起来。
+
 ```powershell
 # 1) 装进 profile（官方 CLI 负责 bundle 层）
 & 'D:\deepseek\resources\runtime\cli\bin\dsh.cmd' plugin --profile desktop add 'G:\工作\dsh\dsh-asset-library'
@@ -189,6 +219,31 @@ powershell -File tools\sync-all.ps1        # 一键同步 dev(assetdev) + deskto
 **目录约定**：插件优先扫 `<项目>/assets/`（`images/`、`video/`、`audio/` 只是习惯分类，
 任意深度的子目录都会扫到）；不存在 `assets/` 时直接把项目根当资产目录。
 
+## 📂 项目结构
+
+```
+dsh-asset-library/
+├── index.js              # host 半入口：注册 web 路由 + Agent 工具
+├── client.js             # 面板（浏览器半）：网格 / 放大卡片 / 键盘 / 批量 / 合集
+├── cordis.patch.yml      # 只 insert 自己那行 loader，不替换官方组件
+├── package.json          # dsh.bundle / dsh.client 声明
+├── icon.svg
+├── locale/{zh,en}.json   # 面板标题与描述
+├── lib/                  # host 半实现（10 个模块，职责单一）
+│   ├── service.js        #   内核：根目录解析、扫描编排、查询、标注
+│   ├── routes.js         #   HTTP 端点、Range 媒体流、安全收口
+│   ├── scan.js           #   递归扫描、跳过规则、目录 facet
+│   ├── store.js          #   index.json 读 / 原子写 / 标注合并
+│   ├── dimensions.js     #   读文件头探分辨率（PNG/JPEG/GIF/WEBP/BMP）
+│   ├── kinds.js          #   扩展名 → 类型 / MIME 封闭清单
+│   ├── paths.js          #   路径归一化、包含检查、软链防御
+│   ├── config.js         #   schemastery 配置模式与默认值
+│   ├── tools.js          #   Agent 工具定义
+│   └── home.js           #   DSH_HOME 解析与原子 JSON 读写
+├── tools/                # 开发与测试脚本（220 项）
+└── docs/screenshots/     # 真机截图
+```
+
 ## 🧪 开发与测试
 
 ```powershell
@@ -227,5 +282,11 @@ UTF-8 脚本按 ANSI 读。`tools\make-asset-fixture.ps1` 可生成带中文目�
 ---
 
 <div align="center">
-<sub>为 DeepSeek Harness 生态而写 · 三条原则：磁盘是权威 · 索引只存人的输入 · 一律不缓存</sub>
+
+**为 DeepSeek Harness 生态而写**
+
+*三条原则：磁盘是权威 · 索引只存人的输入 · 一律不缓存*
+
+[MIT License](LICENSE) · [更新日志](CHANGELOG.md) · [提交问题](https://github.com/Hnqhj/dsh-asset-library/issues)
+
 </div>

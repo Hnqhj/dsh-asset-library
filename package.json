@@ -4,6 +4,24 @@
   "private": true,
   "type": "module",
   "description": "Local asset library for DeepSeek Harness: browse, search and preview a project folder's images, videos and audio, and expose them to the agent as readable assets.",
+  "license": "MIT",
+  "author": "Hnqhj",
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "asset-library",
+    "media-browser",
+    "storyboard"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Hnqhj/dsh-asset-library.git"
+  },
+  "homepage": "https://github.com/Hnqhj/dsh-asset-library#readme",
+  "bugs": {
+    "url": "https://github.com/Hnqhj/dsh-asset-library/issues"
+  },
   "icon": "./icon.svg",
   "exports": {
     ".": "./index.js",
@@ -20,7 +38,9 @@
     "locale",
     "icon.svg",
     "cordis.patch.yml",
-    "README.md"
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
   ],
   "engines": {
     "node": ">=22"
