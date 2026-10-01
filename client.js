@@ -670,8 +670,6 @@ window.__ModuleLoader__.load({
 .dal-cursor{outline:2px solid var(--dsw-alias-brand-primary,#1f6feb);outline-offset:1px}
 .dal-selected{border-color:var(--dsw-alias-brand-primary,#1f6feb)}
 .dal-thumb{position:relative;width:100%;aspect-ratio:4/3;background:var(--dsw-alias-bg-layer-2,rgba(0,0,0,.04));display:flex;align-items:center;justify-content:center;overflow:hidden}
-.dal-thumb-portrait{aspect-ratio:3/4}
-.dal-thumb-portrait img{object-fit:contain}
 .dal-thumb img,.dal-thumb video{width:100%;height:100%;object-fit:cover;display:block}
 .dal-fade{animation:dal-fadein .28s ease-out}
 @keyframes dal-fadein{from{opacity:0}to{opacity:1}}
@@ -744,8 +742,8 @@ window.__ModuleLoader__.load({
          * 贴近视口才挂媒体；视频只在这个前提下才创建 `<video preload="metadata">`
          * （一个页面几十个 video 元素会明显吃内存），拿到元数据后把时长显示在右下角，
          * 悬停时静音预览首段；音频同理挂 `<audio preload="metadata">` 只为拿到时长。
-         * host 探测过尺寸的图片按横竖选择裁切策略：竖图 3:4 + 完整显示（短剧封面
-         * 的构图不能被 4:3 裁掉），横图维持 4:3 填充。
+         * 卡片统一尺寸：缩略图固定 4:3 比例 + object-fit:cover，不随分辨率 / 横竖变化；
+         * 竖图也因此裁切填满，保证网格整齐（要保留完整构图改回 contain 即可）。
          */
         function AssetCard({ item, onOpen, t, revision, selected, cursor }) {
             const [ref, inView] = useInView();
@@ -753,9 +751,6 @@ window.__ModuleLoader__.load({
             const posterState = useVideoPoster(item, inView, revision);
             const [hovered, setHovered] = useState(false);
             const [duration, setDuration] = useState(null);
-            const portrait = item.kind === 'image'
-                && Number.isFinite(item.width) && Number.isFinite(item.height)
-                && item.height > item.width;
             let media = null;
             if (item.kind === 'image') {
                 if (src !== null) media = h('img', { src, alt: item.name, loading: 'lazy', decoding: 'async', className: 'dal-fade' });
@@ -795,7 +790,6 @@ window.__ModuleLoader__.load({
                     : h('span', { className: 'dal-skeleton' });
             }
             const thumbStyle = {};
-            if (portrait) thumbStyle.aspectRatio = '3 / 4';
             if (color !== null) thumbStyle.backgroundColor = color;
             const dims = Number.isFinite(item.width) && Number.isFinite(item.height) ? ` · ${item.width}×${item.height}` : '';
             return h('button', {
@@ -807,7 +801,7 @@ window.__ModuleLoader__.load({
                 onMouseLeave: () => setHovered(false),
                 title: item.relPath,
             },
-                h('span', { className: `dal-thumb${portrait ? ' dal-thumb-portrait' : ''}`, style: Object.keys(thumbStyle).length > 0 ? thumbStyle : undefined },
+                h('span', { className: 'dal-thumb', style: Object.keys(thumbStyle).length > 0 ? thumbStyle : undefined },
                     media,
                     h('span', { className: `dal-check${selected === true ? ' dal-check-on' : ''}`, 'aria-hidden': true }),
                     item.kind === 'video' && inView ? h('span', { className: 'dal-play' }, '▶') : null,

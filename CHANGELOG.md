@@ -43,6 +43,7 @@
 - **阴影软化 / 移除**：底部批量条去掉 `box-shadow`（保留 1px 边框），参照图阴影 `.3→.16`，播放三角文字阴影 `.5→.4`。
 - **骨架屏**改用 `var(--dsw-alias-bg-skeleton)`，不再硬编码。
 - **间距更舒展**：网格 `gap 10→12px`、卡片列宽 `148→152px`。
+- **卡片统一尺寸**：去掉竖图 3:4 特例，所有缩略图固定 4:3 + `object-fit:cover`，横竖都填满、网格整齐，不再随分辨率 / 横竖变化（要保留完整构图可改回 `contain`）。
 
 改动仅限面板（`client.js`），`node --check` 通过；宿主侧无变化。生效需 `dsh plugin --profile desktop install` 后重启 DSH。
 
