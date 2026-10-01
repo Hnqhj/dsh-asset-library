@@ -45,7 +45,13 @@
 - **间距更舒展**：网格 `gap 10→12px`、卡片列宽 `148→152px`。
 - **卡片统一尺寸**：去掉竖图 3:4 特例，所有缩略图固定 4:3 + `object-fit:cover`，横竖都填满、网格整齐，不再随分辨率 / 横竖变化（要保留完整构图可改回 `contain`）。
 
-改动仅限面板（`client.js`），`node --check` 通过；宿主侧无变化。生效需 `dsh plugin --profile desktop install` 后重启 DSH。
+改动仅限面板（`client.js`），`node --check` 通过；宿主侧无变化。
+
+**同步注意**：插件以 `file:` 装进 profile 时，pnpm 不会因工作区源码改动重新拷贝（`pnpm install` 对目录依赖不按内容哈希检测变更，`--force` 也无效）。改完源码后请用 `tools/sync-all.ps1` 同步进 profile，再刷新窗口（面板）/ 重启进程（宿主）。
+
+### 工具
+
+- `tools/dev-install.ps1` 新增 `-SkipProjection`；`tools/sync-all.ps1` 对 app 管理的 desktop profile 传该开关，并在 dev profile 不存在时跳过而非报错——修好本机「改完源码同步不进 profile」的问题。
 
 ### 设计取舍（更新）
 

@@ -18,12 +18,17 @@ param(
 $ErrorActionPreference = 'Continue'
 $script = Join-Path (Split-Path -Parent $PSScriptRoot) 'tools\dev-install.ps1'
 
-Write-Output "== dev profile ($DevHome / $DevProfile) =="
-& powershell -NoProfile -ExecutionPolicy Bypass -File $script -DshHome $DevHome -Profile $DevProfile
+if (Test-Path -LiteralPath (Join-Path $DevHome "profiles\$DevProfile")) {
+    Write-Output "== dev profile ($DevHome / $DevProfile) =="
+    & powershell -NoProfile -ExecutionPolicy Bypass -File $script -DshHome $DevHome -Profile $DevProfile
+}
+else {
+    Write-Output "skip: dev profile not found at $DevHome\profiles\$DevProfile"
+}
 
 if (Test-Path -LiteralPath (Join-Path $DesktopHome "profiles\$DesktopProfile")) {
     Write-Output "== desktop profile ($DesktopHome / $DesktopProfile) =="
-    & powershell -NoProfile -ExecutionPolicy Bypass -File $script -DshHome $DesktopHome -Profile $DesktopProfile
+    & powershell -NoProfile -ExecutionPolicy Bypass -File $script -DshHome $DesktopHome -Profile $DesktopProfile -SkipProjection
 }
 else {
     Write-Output "skip: desktop profile not found at $DesktopHome\profiles\$DesktopProfile"

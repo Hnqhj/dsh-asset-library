@@ -14,7 +14,8 @@
 param(
     [string]$DshHome = 'C:\Users\Administrator\.dsh-dev',
     [string]$Profile = 'assetdev',
-    [string]$ProjectionDonor = 'C:\Users\Administrator\.dsh\profiles\node_modules'
+    [string]$ProjectionDonor = 'C:\Users\Administrator\.dsh\profiles\node_modules',
+    [switch]$SkipProjection
 )
 
 $ErrorActionPreference = 'Stop'
@@ -42,8 +43,15 @@ function Remove-LinkOrDirectory([string]$Path) {
 # The desktop app keeps a projection of the installation's own packages at
 # <DSH_HOME>\profiles\node_modules. A profile created straight from the CLI has
 # none, so link one in from a home that does.
+# The desktop app provides the installation's own packages itself, so a profile
+# that is managed by the app (e.g. the Electron desktop profile) needs no
+# projection. Pass -SkipProjection for those; only CLI-created dev profiles need
+# one linked in from a home that has it.
 $projection = Join-Path $DshHome 'profiles\node_modules'
-if (-not (Test-Path -LiteralPath $projection)) {
+if ($SkipProjection) {
+    Write-Output "skip projection (app-managed profile provides its own packages)"
+}
+elseif (-not (Test-Path -LiteralPath $projection)) {
     if (-not (Test-Path -LiteralPath $ProjectionDonor)) { throw "projection donor missing: $ProjectionDonor" }
     New-Item -ItemType Junction -Path $projection -Target $ProjectionDonor | Out-Null
     Write-Output "created projection: $projection -> $ProjectionDonor"
