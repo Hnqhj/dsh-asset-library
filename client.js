@@ -364,6 +364,95 @@ window.__ModuleLoader__.load({
         }
 
         /**
+         * 持久化媒体缓存（缩略图 / 视频封面 / 放大原图）。
+         *
+         * 为什么不直接依赖浏览器 HTTP 缓存：host 侧对媒体强制 `no-store`（怕工作文件
+         * 被覆盖后吃到旧缓存）。我们用 `relPath|mtimeMs-size` 当内容签名做键 —— 文件被
+         * 改写或改名后签名变化、旧条目自然失效，于是既拿到"只加载一次"的体验，又不背
+         * `no-store` 想防的那类 bug。缓存落在 Cache Storage，翻页与重开应用都直接命中。
+         */
+        const MEDIA_CACHE_NAME = 'dsh-asset-library-media-v1';
+        /** 持久化条目上限；超出后删最旧的一部分，避免无限膨胀。 */
+        const MEDIA_CACHE_MAX = 2000;
+
+        function mediaSignature(item) {
+            return `${item?.mtimeMs ?? 0}-${item?.size ?? 0}`;
+        }
+
+        function mediaCacheKey(relPath, signature) {
+            return `media-v1://${signature}/${encodeURIComponent(relPath)}`;
+        }
+
+        async function openMediaCache() {
+            if (typeof caches === 'undefined') return null;
+            try {
+                if (typeof navigator !== 'undefined' && navigator.storage && typeof navigator.storage.persist === 'function') {
+                    navigator.storage.persist().catch(() => undefined);
+                }
+                return await caches.open(MEDIA_CACHE_NAME);
+            } catch {
+                return null;
+            }
+        }
+
+        /** 命中返回 blob，未命中（或环境不支持）返回 null。 */
+        async function cacheGetMedia(relPath, signature) {
+            const cache = await openMediaCache();
+            if (cache === null) return null;
+            try {
+                const response = await cache.match(mediaCacheKey(relPath, signature));
+                if (response === undefined || response === null) return null;
+                return await response.blob();
+            } catch {
+                return null;
+            }
+        }
+
+        /** 写入持久化缓存；配额超限等异常静默放弃，退回实时取。 */
+        async function cachePutMedia(relPath, signature, blob) {
+            const cache = await openMediaCache();
+            if (cache === null || blob === null || blob.size === 0) return;
+            try {
+                const keys = await cache.keys();
+                if (keys.length >= MEDIA_CACHE_MAX) {
+                    for (const stale of keys.slice(0, Math.ceil(MEDIA_CACHE_MAX * 0.2))) {
+                        await cache.delete(stale).catch(() => undefined);
+                    }
+                }
+                await cache.put(
+                    mediaCacheKey(relPath, signature),
+                    new Response(blob, { headers: { 'content-type': blob.type || 'application/octet-stream' } }),
+                );
+            } catch {
+                /* 配额超限：静默放弃持久化 */
+            }
+        }
+
+        /** 视频时长的浏览器侧缓存：与封面用同一套签名，避免重开还要重新探测。 */
+        const DURATION_KEY = 'dsh-asset-library.durations.v1';
+
+        function readDuration(item) {
+            const signature = mediaSignature(item);
+            try {
+                const map = JSON.parse(localStorage.getItem(DURATION_KEY) || '{}');
+                return map[`${signature}|${item.relPath}`] ?? null;
+            } catch {
+                return null;
+            }
+        }
+
+        function writeDuration(item, dur) {
+            const signature = mediaSignature(item);
+            try {
+                const map = JSON.parse(localStorage.getItem(DURATION_KEY) || '{}');
+                map[`${signature}|${item.relPath}`] = dur;
+                localStorage.setItem(DURATION_KEY, JSON.stringify(map));
+            } catch {
+                /* 纯便利数据，存不下就算了 */
+            }
+        }
+
+        /**
          * 元素是否贴近视口（±`PROXIMITY_PX`）。
          *
          * 与"只翻转一次"的旧策略不同，这里是**双向**的：滚出邻近区就把媒体卸回
@@ -391,10 +480,10 @@ window.__ModuleLoader__.load({
         /**
          * 图片缩略图。
          *
-         * 原图可能是 4K/8K，直接塞进 148px 的格子会让浏览器解码几十兆像素。这里在
-         * 浏览器里降采样到 `THUMB_MAX` 长边再喂给 `<img>`，顺手把缩略图压成 1×1 读
-         * 出主色，给卡片当加载占位色。结果进 LRU，卸载**不**释放 —— 释放权在缓存
-         * 淘汰手里。任何一步失败都退回原图 URL —— 缩略图是优化，不是前提。
+         * 原图可能是 4K/8K，直接塞进格子会让浏览器解码几十兆像素；这里在浏览器里
+         * 降采样到 `THUMB_MAX` 长边再喂给 `<img>`。结果先进内存 LRU（翻页 / 重挂载的
+         * 快路径），再进 Cache Storage 持久化（翻页回去 / 重开应用都直接命中，不再向
+         * 宿主重取）。任何一步失败都退回原图 URL —— 缩略图是优化，不是前提。
          */
         function useThumb(item, active, revision) {
             const [state, setState] = useState(() => {
@@ -406,13 +495,14 @@ window.__ModuleLoader__.load({
                     : { src: null, color: null, pending: false };
             });
             useEffect(() => {
-                const preloaded = active && item.kind === 'image'
+                const signature = mediaSignature(item);
+                const fromMemory = active && item.kind === 'image'
                     ? cacheGetThumb(`${revision}|${item.relPath}`)
                     : undefined;
-                setState(preloaded !== undefined
-                    ? { src: preloaded.url, color: preloaded.color ?? null, pending: false }
+                setState(fromMemory !== undefined
+                    ? { src: fromMemory.url, color: fromMemory.color ?? null, pending: false }
                     : { src: null, color: null, pending: false });
-                if (!active || item.kind !== 'image' || preloaded !== undefined) return undefined;
+                if (!active || item.kind !== 'image' || fromMemory !== undefined) return undefined;
                 const original = fileUrl(item.relPath, revision);
                 if (typeof createImageBitmap !== 'function') {
                     setState({ src: original, color: null, pending: false });
@@ -422,37 +512,48 @@ window.__ModuleLoader__.load({
                 setState((previous) => (previous.pending ? previous : { ...previous, pending: true }));
                 (async () => {
                     try {
-                        const response = await fetch(original, { credentials: 'same-origin' });
-                        if (!response.ok) throw new Error(String(response.status));
-                        const blob = await response.blob();
-                        const bitmap = await createImageBitmap(blob);
-                        const longest = Math.max(bitmap.width, bitmap.height);
-                        if (!Number.isFinite(longest) || longest <= THUMB_MAX) {
-                            if (typeof bitmap.close === 'function') bitmap.close();
-                            if (!cancelled) setState({ src: original, color: null, pending: false });
-                            return;
-                        }
-                        const scale = THUMB_MAX / longest;
-                        const canvas = document.createElement('canvas');
-                        canvas.width = Math.max(1, Math.round(bitmap.width * scale));
-                        canvas.height = Math.max(1, Math.round(bitmap.height * scale));
-                        canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+                        // 先查持久化缓存：翻页回去 / 重开应用直接命中，不向宿主重取。
+                        let url;
                         let color = null;
-                        try {
-                            const tiny = document.createElement('canvas');
-                            tiny.width = 1;
-                            tiny.height = 1;
-                            const tinyCtx = tiny.getContext('2d');
-                            tinyCtx.drawImage(bitmap, 0, 0, 1, 1);
-                            const data = tinyCtx.getImageData(0, 0, 1, 1).data;
-                            color = `rgb(${data[0]},${data[1]},${data[2]})`;
-                        } catch {
-                            /* 主色是装饰，canvas 读不了像素就算了 */
+                        const cached = await cacheGetMedia(item.relPath, signature);
+                        if (cached !== null) {
+                            url = URL.createObjectURL(cached);
+                        } else {
+                            const response = await fetch(original, { credentials: 'same-origin' });
+                            if (!response.ok) throw new Error(String(response.status));
+                            const blob = await response.blob();
+                            const bitmap = await createImageBitmap(blob);
+                            const longest = Math.max(bitmap.width, bitmap.height);
+                            if (!Number.isFinite(longest) || longest <= THUMB_MAX) {
+                                // 小图：直接缓存原图 blob，省一次再解码。
+                                if (typeof bitmap.close === 'function') bitmap.close();
+                                url = URL.createObjectURL(blob);
+                                await cachePutMedia(item.relPath, signature, blob);
+                            } else {
+                                const scale = THUMB_MAX / longest;
+                                const canvas = document.createElement('canvas');
+                                canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+                                canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+                                canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+                                try {
+                                    const tiny = document.createElement('canvas');
+                                    tiny.width = 1;
+                                    tiny.height = 1;
+                                    const tinyCtx = tiny.getContext('2d');
+                                    tinyCtx.drawImage(bitmap, 0, 0, 1, 1);
+                                    const data = tinyCtx.getImageData(0, 0, 1, 1).data;
+                                    color = `rgb(${data[0]},${data[1]},${data[2]})`;
+                                } catch {
+                                    /* 主色是装饰，canvas 读不了像素就算了 */
+                                }
+                                if (typeof bitmap.close === 'function') bitmap.close();
+                                const thumb = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.78));
+                                if (thumb === null) { if (!cancelled) setState({ src: original, color: null, pending: false }); return; }
+                                url = URL.createObjectURL(thumb);
+                                await cachePutMedia(item.relPath, signature, thumb);
+                            }
                         }
-                        if (typeof bitmap.close === 'function') bitmap.close();
-                        const thumb = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.78));
-                        if (cancelled || thumb === null) return;
-                        const url = URL.createObjectURL(thumb);
+                        if (cancelled || url === undefined) return;
                         cacheSetThumb(`${revision}|${item.relPath}`, { url, color });
                         if (!cancelled) setState({ src: url, color, pending: false });
                     } catch {
@@ -464,7 +565,81 @@ window.__ModuleLoader__.load({
                 return () => {
                     cancelled = true;
                 };
-            }, [active, item.kind, item.relPath, revision]);
+            }, [active, item.kind, item.relPath, revision, item.mtimeMs, item.size]);
+            return state;
+        }
+
+        /**
+         * 视频封面：首次进视口时取首帧画到 canvas，生成一张静态封面图，持久化缓存；
+         * 之后翻页 / 重开都直接显示封面，不再为每个卡片新建 `<video>` 重新请求元数据
+         * （一个页面几十个 video 元素既吃内存又拖慢）。时长一并探测并随签名缓存。
+         */
+        function useVideoPoster(item, active, revision) {
+            const [state, setState] = useState(() => {
+                const preloaded = active && item.kind === 'video'
+                    ? cacheGetThumb(`${revision}|${item.relPath}`)
+                    : undefined;
+                return preloaded !== undefined
+                    ? { poster: preloaded.url, duration: preloaded.duration ?? readDuration(item), pending: false }
+                    : { poster: null, duration: active && item.kind === 'video' ? readDuration(item) : null, pending: false };
+            });
+            useEffect(() => {
+                const signature = mediaSignature(item);
+                const fromMemory = active && item.kind === 'video'
+                    ? cacheGetThumb(`${revision}|${item.relPath}`)
+                    : undefined;
+                setState(fromMemory !== undefined
+                    ? { poster: fromMemory.url, duration: fromMemory.duration ?? readDuration(item), pending: false }
+                    : { poster: null, duration: active && item.kind === 'video' ? readDuration(item) : null, pending: false });
+                if (!active || item.kind !== 'video' || fromMemory !== undefined) return undefined;
+                let cancelled = false;
+                setState((previous) => (previous.pending ? previous : { ...previous, pending: true }));
+                (async () => {
+                    try {
+                        const cached = await cacheGetMedia(item.relPath, signature);
+                        if (cached !== null) {
+                            const url = URL.createObjectURL(cached);
+                            cacheSetThumb(`${revision}|${item.relPath}`, { url, color: null, duration: readDuration(item) });
+                            if (!cancelled) setState({ poster: url, duration: readDuration(item), pending: false });
+                            return;
+                        }
+                        const video = document.createElement('video');
+                        video.muted = true;
+                        video.preload = 'metadata';
+                        video.src = fileUrl(item.relPath, revision);
+                        await new Promise((resolve, reject) => {
+                            video.onloadedmetadata = () => resolve();
+                            video.onerror = () => reject(new Error('video'));
+                        });
+                        const dur = humanDuration(video.duration);
+                        if (dur !== null) writeDuration(item, dur);
+                        const seekTo = Math.min(Math.max(0, (video.duration || 0) * 0.1), Math.max(0, (video.duration || 1) - 0.05));
+                        await new Promise((resolve) => {
+                            video.onseeked = () => resolve();
+                            try { video.currentTime = seekTo; } catch { resolve(); }
+                        });
+                        const canvas = document.createElement('canvas');
+                        canvas.width = video.videoWidth || 320;
+                        canvas.height = video.videoHeight || 180;
+                        canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+                        const poster = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.7));
+                        video.removeAttribute('src');
+                        video.load();
+                        if (cancelled || poster === null) return;
+                        const url = URL.createObjectURL(poster);
+                        cacheSetThumb(`${revision}|${item.relPath}`, { url, color: null, duration: dur });
+                        await cachePutMedia(item.relPath, signature, poster);
+                        if (!cancelled) setState({ poster: url, duration: dur, pending: false });
+                    } catch {
+                        if (!cancelled) setState({ poster: null, duration: null, pending: false });
+                    } finally {
+                        if (!cancelled) setState((previous) => (previous.pending ? { ...previous, pending: false } : previous));
+                    }
+                })();
+                return () => {
+                    cancelled = true;
+                };
+            }, [active, item.kind, item.relPath, revision, item.mtimeMs, item.size]);
             return state;
         }
 
@@ -584,6 +759,8 @@ window.__ModuleLoader__.load({
         function AssetCard({ item, onOpen, t, revision, selected, cursor }) {
             const [ref, inView] = useInView();
             const { src, color, pending } = useThumb(item, inView, revision);
+            const posterState = useVideoPoster(item, inView, revision);
+            const [hovered, setHovered] = useState(false);
             const [duration, setDuration] = useState(null);
             const portrait = item.kind === 'image'
                 && Number.isFinite(item.width) && Number.isFinite(item.height)
@@ -594,27 +771,25 @@ window.__ModuleLoader__.load({
                 else if (pending || !inView) media = h('span', { className: 'dal-skeleton' });
                 else media = h('span', { className: 'dal-dim', style: { fontSize: 20 } }, '▨');
             } else if (item.kind === 'video') {
-                media = inView
-                    ? h('video', {
+                if (posterState.poster !== null) {
+                    // 已有缓存封面：直接显示图片；只有悬停时才临时挂一个会播放的 <video>。
+                    media = [
+                        h('img', { src: posterState.poster, alt: item.name, loading: 'lazy', decoding: 'async', className: 'dal-fade' }),
+                        HOVER_PREVIEW && hovered ? h('video', {
+                            src: fileUrl(item.relPath, revision),
+                            autoPlay: true, muted: true, loop: true, playsInline: true,
+                            style: { position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' },
+                        }) : null,
+                    ];
+                } else if (inView) {
+                    // 封面还在生成：挂一个只取元数据的 <video>（不显示），生成完即替换。
+                    media = h('video', {
                         src: fileUrl(item.relPath, revision),
-                        preload: 'metadata',
-                        muted: true,
-                        playsInline: true,
-                        onLoadedMetadata: (event) => setDuration(humanDuration(event.target.duration)),
-                        onMouseEnter: HOVER_PREVIEW ? (event) => {
-                            const playing = event.target.play();
-                            if (playing && typeof playing.catch === 'function') playing.catch(() => undefined);
-                        } : undefined,
-                        onMouseLeave: HOVER_PREVIEW ? (event) => {
-                            event.target.pause();
-                            try {
-                                event.target.currentTime = 0;
-                            } catch {
-                                /* 个别容器不支持 seek，停在当前帧即可 */
-                            }
-                        } : undefined,
-                    })
-                    : h('span', { className: 'dal-skeleton' });
+                        preload: 'metadata', muted: true, playsInline: true,
+                    });
+                } else {
+                    media = h('span', { className: 'dal-skeleton' });
+                }
             } else {
                 // 音频：♪ 占位 + 一个不显示的 <audio>，只为拿到时长做徽标。
                 media = inView
@@ -637,6 +812,8 @@ window.__ModuleLoader__.load({
                 className: `dal-card${cursor === true ? ' dal-cursor' : ''}${selected === true ? ' dal-selected' : ''}`,
                 ref,
                 onClick: (event) => onOpen(item, event),
+                onMouseEnter: HOVER_PREVIEW ? () => setHovered(true) : undefined,
+                onMouseLeave: () => setHovered(false),
                 title: item.relPath,
             },
                 h('span', { className: `dal-thumb${portrait ? ' dal-thumb-portrait' : ''}`, style: Object.keys(thumbStyle).length > 0 ? thumbStyle : undefined },
@@ -644,7 +821,9 @@ window.__ModuleLoader__.load({
                     h('span', { className: `dal-check${selected === true ? ' dal-check-on' : ''}`, 'aria-hidden': true }),
                     item.kind === 'video' && inView ? h('span', { className: 'dal-play' }, '▶') : null,
                     h('span', { className: 'dal-badge' }, t(item.kind)),
-                    duration !== null ? h('span', { className: 'dal-badge-r' }, duration) : null),
+                    (item.kind === 'video' ? posterState.duration : duration) !== null
+                        ? h('span', { className: 'dal-badge-r' }, item.kind === 'video' ? posterState.duration : duration)
+                        : null),
                 h('span', { className: 'dal-meta' },
                     h('span', { className: 'dal-name' }, item.name),
                     h('span', { className: 'dal-dim' }, `${humanSize(item.size)}${dims}`),
@@ -736,6 +915,40 @@ window.__ModuleLoader__.load({
             }, [item.kind]);
 
             const source = fileUrl(item.relPath, revision);
+            // 放大原图也走持久化缓存：首次打开实时取并缓存，之后翻到 / 重开应用直接命中
+            // （大原图按体积阈值不持久化，避免撑爆本地存储）。
+            const [cachedSource, setCachedSource] = useState(null);
+            const cachedUrlRef = useRef(null);
+            useEffect(() => {
+                if (item.kind !== 'image') { setCachedSource(null); return undefined; }
+                let cancelled = false;
+                const signature = mediaSignature(item);
+                (async () => {
+                    const cached = await cacheGetMedia(item.relPath, signature);
+                    let url;
+                    if (cached !== null) {
+                        url = URL.createObjectURL(cached);
+                    } else {
+                        try {
+                            const response = await fetch(fileUrl(item.relPath, revision), { credentials: 'same-origin' });
+                            if (!response.ok) throw new Error(String(response.status));
+                            const blob = await response.blob();
+                            url = URL.createObjectURL(blob);
+                            if (blob.size <= 8 * 1024 * 1024) await cachePutMedia(item.relPath, signature, blob);
+                        } catch {
+                            url = undefined;
+                        }
+                    }
+                    if (cancelled || url === undefined) { if (url !== undefined) URL.revokeObjectURL(url); return; }
+                    if (cachedUrlRef.current !== null) URL.revokeObjectURL(cachedUrlRef.current);
+                    cachedUrlRef.current = url;
+                    setCachedSource(url);
+                })();
+                return () => { cancelled = true; };
+            }, [item.relPath, item.kind, revision, item.mtimeMs, item.size]);
+            useEffect(() => () => {
+                if (cachedUrlRef.current !== null) { URL.revokeObjectURL(cachedUrlRef.current); cachedUrlRef.current = null; }
+            }, []);
             const save = async () => {
                 setState('saving');
                 try {
@@ -812,7 +1025,7 @@ window.__ModuleLoader__.load({
             let stage;
             if (item.kind === 'image') {
                 stage = h('img', {
-                    src: source,
+                    src: cachedSource ?? source,
                     alt: item.name,
                     className: 'dal-zoomable',
                     style: {
