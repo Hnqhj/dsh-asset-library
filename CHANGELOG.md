@@ -32,6 +32,20 @@
 **注意**：宿主侧媒体响应仍维持 `cache-control: no-store`（防止工作文件被覆盖后吃到旧
 缓存），持久化完全发生在客户端 Cache Storage，不受该头影响。
 
+### 视觉
+
+**前端视觉对齐 DSH 极简设计**
+
+面板样式本就通过 `var(--dsw-alias-*, …)` 继承 DSH 主题变量（浅色 `neutral-bluish` 中性偏蓝灰调），本次清掉几处硬编码让观感更统一、更克制：
+
+- **标签去彩虹**：删除网格卡片与详情页里按 `hashHue` 上色的 `hsla` 内联样式，回到中性 `.dal-tag`（由 DSH token 驱动，跨卡片同名标签仍稳定）；函数 `hashHue` 已无引用，一并删除。
+- **徽标 / 勾选圈改用照片遮罩 token**：原 `rgba(0,0,0,.55/.35)` 黑块改为 `var(--dsw-alias-bg-mask-photo)`（DSH 专门压在照片上保证可读的遮罩）+ `var(--dsw-alias-label-primary-inverted)` 反色文字。
+- **阴影软化 / 移除**：底部批量条去掉 `box-shadow`（保留 1px 边框），参照图阴影 `.3→.16`，播放三角文字阴影 `.5→.4`。
+- **骨架屏**改用 `var(--dsw-alias-bg-skeleton)`，不再硬编码。
+- **间距更舒展**：网格 `gap 10→12px`、卡片列宽 `148→152px`。
+
+改动仅限面板（`client.js`），`node --check` 通过；宿主侧无变化。生效需 `dsh plugin --profile desktop install` 后重启 DSH。
+
 ### 设计取舍（更新）
 
 - 原「一律不缓存」改为「宿主不缓存、客户端按需持久化」：宿主 `no-store` 保留，

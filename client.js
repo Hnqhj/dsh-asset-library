@@ -322,15 +322,6 @@ window.__ModuleLoader__.load({
             }
         }
 
-        /** 标签名 → 稳定的色相；同名标签永远同色，跨卡片可识别。 */
-        function hashHue(tag) {
-            let hash = 0;
-            for (let index = 0; index < tag.length; index += 1) {
-                hash = (hash * 31 + tag.charCodeAt(index)) >>> 0;
-            }
-            return hash % 360;
-        }
-
         /**
          * 缩略图 LRU：`rev|relPath` → `{ url, color }`。
          *
@@ -672,7 +663,7 @@ window.__ModuleLoader__.load({
 .dal-chip-x{opacity:.55;font-weight:400}
 .dal-chip-x:hover{opacity:1}
 .dal-body{flex:1;min-height:0;overflow:auto;padding:12px 16px}
-.dal-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:10px;align-items:start}
+.dal-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(152px,1fr));gap:12px;align-items:start}
 .dal-card{border:1px solid var(--dsw-alias-border-l1,rgba(0,0,0,.08));background:var(--dsw-alias-bg-layer-1,#fff);border-radius:var(--dsw-radius-md,8px);overflow:hidden;cursor:pointer;display:flex;flex-direction:column;padding:0;text-align:left;font:inherit;color:inherit;content-visibility:auto;contain-intrinsic-size:auto 180px}
 .dal-card:hover{border-color:var(--dsw-alias-brand-primary,#1f6feb)}
 .dal-card:focus-visible{outline:2px solid var(--dsw-alias-brand-primary,#1f6feb);outline-offset:1px}
@@ -684,16 +675,16 @@ window.__ModuleLoader__.load({
 .dal-thumb img,.dal-thumb video{width:100%;height:100%;object-fit:cover;display:block}
 .dal-fade{animation:dal-fadein .28s ease-out}
 @keyframes dal-fadein{from{opacity:0}to{opacity:1}}
-.dal-check{position:absolute;right:6px;top:6px;width:18px;height:18px;border-radius:50%;border:1.5px solid rgba(255,255,255,.75);background:rgba(0,0,0,.35);display:none}
+.dal-check{position:absolute;right:6px;top:6px;width:18px;height:18px;border-radius:50%;border:1.5px solid var(--dsw-alias-border-inverted,rgba(255,255,255,.7));background:var(--dsw-alias-bg-mask-photo,rgba(0,0,0,.4));display:none}
 .dal-card:hover .dal-check,.dal-selected .dal-check{display:block}
 .dal-check-on{background:var(--dsw-alias-brand-primary,#1f6feb);border-color:transparent}
 .dal-check-on::after{content:'✓';color:#fff;font-size:12px;display:block;text-align:center;line-height:15px}
-.dal-skeleton{width:100%;height:100%;background:linear-gradient(100deg,transparent 20%,var(--dsw-alias-interactive-bg-hover,rgba(0,0,0,.05)) 40%,transparent 60%);animation:dal-shimmer 1.2s linear infinite}
+.dal-skeleton{width:100%;height:100%;background:linear-gradient(100deg,transparent 20%,var(--dsw-alias-bg-skeleton,rgba(0,0,0,.05)) 40%,transparent 60%);animation:dal-shimmer 1.2s linear infinite}
 @keyframes dal-shimmer{from{transform:translateX(-100%)}to{transform:translateX(100%)}}
 @media (prefers-reduced-motion:reduce){.dal-skeleton{animation:none}.dal-fade{animation:none}}
-.dal-badge{position:absolute;left:6px;top:6px;background:rgba(0,0,0,.55);color:#fff;border-radius:999px;padding:1px 7px;font-size:11px;line-height:16px}
-.dal-badge-r{position:absolute;right:6px;bottom:6px;background:rgba(0,0,0,.55);color:#fff;border-radius:999px;padding:1px 7px;font-size:11px;line-height:16px}
-.dal-play{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;text-shadow:0 1px 6px rgba(0,0,0,.5);font-size:26px;pointer-events:none}
+.dal-badge{position:absolute;left:6px;top:6px;background:var(--dsw-alias-bg-mask-photo,rgba(0,0,0,.6));color:var(--dsw-alias-label-primary-inverted,#fff);border-radius:999px;padding:1px 7px;font-size:11px;line-height:16px}
+.dal-badge-r{position:absolute;right:6px;bottom:6px;background:var(--dsw-alias-bg-mask-photo,rgba(0,0,0,.6));color:var(--dsw-alias-label-primary-inverted,#fff);border-radius:999px;padding:1px 7px;font-size:11px;line-height:16px}
+.dal-play{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;text-shadow:0 1px 4px rgba(0,0,0,.4);font-size:26px;pointer-events:none}
 .dal-meta{padding:6px 8px;display:flex;flex-direction:column;gap:2px;min-width:0}
 .dal-name{font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .dal-dim{color:var(--dsw-alias-label-tertiary,#81858c);font-size:11px}
@@ -701,7 +692,7 @@ window.__ModuleLoader__.load({
 .dal-tag{border:1px solid transparent;background:var(--dsw-alias-bg-layer-2,rgba(0,0,0,.06));border-radius:999px;padding:1px 6px;font-size:11px;color:var(--dsw-alias-label-secondary,#4a4f57)}
 .dal-empty{display:flex;flex-direction:column;gap:6px;align-items:center;justify-content:center;height:100%;color:var(--dsw-alias-label-tertiary,#81858c);text-align:center;padding:32px 16px}
 .dal-error{border:1px solid var(--dsw-alias-state-error-primary,#d93025);color:var(--dsw-alias-state-error-primary,#d93025);border-radius:var(--dsw-radius-sm,6px);padding:6px 10px;font-size:12px}
-.dal-batchbar{position:sticky;bottom:0;display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 10px;margin-top:12px;border:1px solid var(--dsw-alias-border-l2,rgba(0,0,0,.14));border-radius:var(--dsw-radius-md,8px);background:var(--dsw-alias-bg-layer-1,#fff);box-shadow:0 -4px 12px rgba(0,0,0,.08)}
+.dal-batchbar{position:sticky;bottom:0;display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 10px;margin-top:12px;border:1px solid var(--dsw-alias-border-l2,rgba(0,0,0,.14));border-radius:var(--dsw-radius-md,8px);background:var(--dsw-alias-bg-layer-1,#fff)}
 .dal-detail{display:flex;flex-direction:column;gap:10px;height:100%;min-height:0;padding:12px 16px}
 .dal-detail-bar{display:flex;align-items:center;gap:8px;min-width:0}
 .dal-count{color:var(--dsw-alias-label-tertiary,#81858c);font-size:12px;white-space:nowrap}
@@ -709,7 +700,7 @@ window.__ModuleLoader__.load({
 .dal-detail-grid{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:14px}
 @media (max-width:960px){.dal-detail-grid{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(200px,1fr) auto}}
 .dal-stage{position:relative;background:var(--dsw-alias-bg-layer-2,rgba(0,0,0,.04));border-radius:var(--dsw-radius-md,8px);display:flex;align-items:center;justify-content:center;overflow:hidden;min-height:220px;padding:8px}
-.dal-ref{position:absolute;right:10px;bottom:10px;width:96px;border:1px solid var(--dsw-alias-brand-primary,#1f6feb);border-radius:6px;overflow:hidden;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.3)}
+.dal-ref{position:absolute;right:10px;bottom:10px;width:96px;border:1px solid var(--dsw-alias-brand-primary,#1f6feb);border-radius:6px;overflow:hidden;cursor:pointer;box-shadow:0 1px 6px rgba(0,0,0,.16)}
 .dal-ref img{width:100%;height:72px;object-fit:cover;display:block}
 .dal-ref-label{position:absolute;left:0;top:0;background:var(--dsw-alias-brand-primary,#1f6feb);color:#fff;font-size:10px;padding:0 5px;line-height:14px;border-radius:0 0 4px 0}
 .dal-stage img,.dal-stage video{max-width:100%;max-height:100%;display:block}
@@ -827,7 +818,7 @@ window.__ModuleLoader__.load({
                 h('span', { className: 'dal-meta' },
                     h('span', { className: 'dal-name' }, item.name),
                     h('span', { className: 'dal-dim' }, `${humanSize(item.size)}${dims}`),
-                    item.tags.length > 0 ? h('span', { className: 'dal-tags' }, item.tags.slice(0, 3).map((tag) => h('span', { className: 'dal-tag', key: tag, style: { background: `hsla(${hashHue(tag)},65%,50%,.16)` } }, tag))) : null));
+                    item.tags.length > 0 ? h('span', { className: 'dal-tags' }, item.tags.slice(0, 3).map((tag) => h('span', { className: 'dal-tag', key: tag }, tag))) : null));
         }
 
         /**
@@ -1132,7 +1123,6 @@ window.__ModuleLoader__.load({
                                     className: 'dal-chip',
                                     key: tag,
                                     title: t('removeTag'),
-                                    style: { background: `hsla(${hashHue(tag)},65%,50%,.16)`, borderColor: `hsla(${hashHue(tag)},65%,50%,.35)` },
                                     onClick: () => setTags(tags.filter((value) => value !== tag)),
                                 }, `${tag} ×`)),
                                 h('input', {
