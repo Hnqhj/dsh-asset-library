@@ -10,3 +10,12 @@ Thumbs.db
 
 # 测试夹具与本地运行产物
 .dsh-assets/
+
+# 离屏预览页：由 `node tools/render-preview.mjs` 生成，README 用的是 docs/screenshots/。
+# 这是一堆内联了整份 CSS 与假数据的 HTML（几百 KB），随时可重新生成，不进版本库。
+docs/preview/
+
+# 我的工作笔记与改动快照（不属于插件源码，也不该污染仓库历史）。
+# 注意 .workbuddy/verify/ 是**例外**：无头截图脚本被 README 的验证流程引用着，需要跟踪。
+.workbuddy/memory/
+.workbuddy/*.diff
